@@ -17,6 +17,9 @@ from openpyxl.worksheet.cell_range import MultiCellRange
 
 from .models import MarkImage
 
+MAX_ROW_HEIGHT = 409
+TEXT_LINE_HEIGHT = 20
+
 
 def expand_sections(ws, regions):
     # region=(原始首行, 原始末行, 实际所需行数)，保留原有空白行，只在不足时扩展。
@@ -80,41 +83,77 @@ def estimated_lines(text, width):
     return total
 
 
-def add_mark(ws, row, col, asset, text):
+def prepare_mark(asset, col_width):
     stream = BytesIO()
     with asset.file.open('rb') as source:
         stream.write(source.read())
     stream.seek(0)
     img = Image(stream)
-    col_width = ws.column_dimensions[get_column_letter(col)].width
     max_width = min(145, max(60, col_width * 7 - 12))
     ratio = min(max_width / img.width, 78 / img.height, 1)
-    img.width, img.height = round(img.width * ratio), round(img.height * ratio)
-    text_height = estimated_lines(text, col_width) * 18 if text else 0
-    # 图形置于文本之后，同一格中完整保留组合标识。
+    img.width, img.height = max(1, round(img.width * ratio)), max(1, round(img.height * ratio))
+    return img
+
+
+def prepare_rows(ws, records, make_values, image_columns, assets):
+    rows = []
+    for offset, record in enumerate(records):
+        values = [offset + 1] + make_values(record)
+        height = 40  # 像素；对应最小 30pt 行高。
+        images = []
+        for col, value in enumerate(values, 1):
+            width = ws.column_dimensions[get_column_letter(col)].width
+            height = max(height, estimated_lines(value, width) * TEXT_LINE_HEIGHT + 8)
+        for key, col in image_columns.items():
+            if record['data'].get(key):
+                width = ws.column_dimensions[get_column_letter(col)].width
+                img = prepare_mark(assets[record['data'][key]], width)
+                text = values[col - 1]
+                top = estimated_lines(text, width) * TEXT_LINE_HEIGHT + 4 if text else 4
+                images.append({'col': col, 'img': img, 'top': top})
+                height = max(height, top + img.height + 6)
+        height *= .75  # Excel 使用 pt，图样锚点使用像素。
+        rows.append({'values': values, 'height': height,
+                     'span': max(1, ceil(height / MAX_ROW_HEIGHT)), 'images': images})
+    return rows
+
+
+def physical_rows(rows):
+    return sum(row['span'] for row in rows)
+
+
+def add_mark(ws, row, span, col, img, top):
+    # 长记录跨多个物理行；把图样锚定到其实际所在行，而非使用越界偏移。
+    anchor_row = row
+    while anchor_row < row + span - 1:
+        height = ws.row_dimensions[anchor_row].height / .75
+        if top < height:
+            break
+        top -= height
+        anchor_row += 1
     img.anchor = OneCellAnchor(
-        _from=AnchorMarker(col=col - 1, row=row - 1, colOff=pixels_to_EMU(4), rowOff=pixels_to_EMU(text_height + 4)),
+        _from=AnchorMarker(col=col - 1, row=anchor_row - 1,
+                           colOff=pixels_to_EMU(4), rowOff=pixels_to_EMU(top)),
         ext=XDRPositiveSize2D(pixels_to_EMU(img.width), pixels_to_EMU(img.height)),
     )
     ws.add_image(img)
-    ws.row_dimensions[row].height = min(409, max(ws.row_dimensions[row].height or 30,
-                                               (text_height + img.height + 10) * .75))
 
 
-def write_rows(ws, start, records, make_values, image_columns, assets):
-    for offset, record in enumerate(records):
-        row = start + offset
-        data = record['data']
-        values = [offset + 1] + make_values(record)
-        height = 30
-        for col, value in enumerate(values, 1):
+def write_rows(ws, start, records):
+    row = start
+    for record in records:
+        span = record['span']
+        for current in range(row, row + span):
+            ws.row_dimensions[current].height = record['height'] / span
+        for col, value in enumerate(record['values'], 1):
+            if span > 1:
+                # 各列纵向合并，仍是一条业务记录，不重复序号或商标件数。
+                ws.merge_cells(start_row=row, end_row=row + span - 1,
+                               start_column=col, end_column=col)
             safe_value(ws.cell(row, col), value)
-            width = ws.column_dimensions[get_column_letter(col)].width
-            height = max(height, estimated_lines(value, width) * 15 + 8)
-        ws.row_dimensions[row].height = min(409, height)
-        for key, col in image_columns.items():
-            if data.get(key):
-                add_mark(ws, row, col, assets[data[key]], values[col - 1])
+        for image in record['images']:
+            add_mark(ws, row, span, **image)
+        row += span
 
 
 def set_widths(ws, values):
@@ -186,45 +225,52 @@ def export_workbook(payloads):
     # 第 1 张不作任何修改。
     ws = wb.worksheets[1]
     famous, other = select('domestic_famous'), select('domestic_other')
-    mapping = expand_sections(ws, [(7, 9, len(famous)), (13, 15, len(other))])
     set_widths(ws, [7, 24, 15, 22, 27, 32, 13, 12, 32, 12, 12, 36])
+    famous_rows = prepare_rows(ws, famous, registered, {'mark_image': 2}, assets)
+    other_rows = prepare_rows(ws, other, registered, {'mark_image': 2}, assets)
+    mapping = expand_sections(ws, [(7, 9, physical_rows(famous_rows)), (13, 15, physical_rows(other_rows))])
     safe_value(ws['A3'], f'国内注册商标(总件数）：{len(famous) + len(other)}')
     safe_value(ws['A4'], f'驰名商标（件数）：{len(famous)}')
     safe_value(ws.cell(mapping(10), 1), f'其它注册商标（件数）：{len(other)}')
-    write_rows(ws, mapping(7), famous, registered, {'mark_image': 2}, assets)
-    write_rows(ws, mapping(13), other, registered, {'mark_image': 2}, assets)
+    write_rows(ws, mapping(7), famous_rows)
+    write_rows(ws, mapping(13), other_rows)
 
     ws = wb.worksheets[2]
     overseas = select('overseas')
-    mapping = expand_sections(ws, [(6, 12, len(overseas))])
     set_widths(ws, [7, 20, 24, 15, 22, 27, 32, 13, 12, 32, 12, 12, 36])
+    overseas_rows = prepare_rows(ws, overseas, lambda e: [e['data'].get('country', '')] + registered(e),
+                                 {'mark_image': 3}, assets)
+    mapping = expand_sections(ws, [(6, 12, physical_rows(overseas_rows))])
     safe_value(ws['A3'], f'境外注册商标(总件数）：{len(overseas)}')
-    write_rows(ws, mapping(6), overseas, lambda e: [e['data'].get('country', '')] + registered(e),
-               {'mark_image': 3}, assets)
+    write_rows(ws, mapping(6), overseas_rows)
 
     ws = wb.worksheets[3]
     domestic, abroad = select('unregistered_domestic'), select('unregistered_overseas')
-    mapping = expand_sections(ws, [(6, 9, len(domestic)), (13, 16, len(abroad))])
     set_widths(ws, [7, 28, 16, 20, 38, 14, 14, 40])
+    domestic_rows = prepare_rows(ws, domestic, unregistered, {'mark_image': 2}, assets)
+    abroad_rows = prepare_rows(ws, abroad, unregistered, {'mark_image': 2}, assets)
+    mapping = expand_sections(ws, [(6, 9, physical_rows(domestic_rows)), (13, 16, physical_rows(abroad_rows))])
     safe_value(ws['A3'], f'境内未注册商标(总件数）：{len(domestic)}')
     safe_value(ws.cell(mapping(10), 1), f'境外未注册商标(总件数）：{len(abroad)}')
-    write_rows(ws, mapping(6), domestic, unregistered, {'mark_image': 2}, assets)
-    write_rows(ws, mapping(13), abroad, unregistered, {'mark_image': 2}, assets)
+    write_rows(ws, mapping(6), domestic_rows)
+    write_rows(ws, mapping(13), abroad_rows)
 
     ws = wb.worksheets[4]
     names = select('trade_name')
     groups = {level: [e for e in names if min(e['enterprise']['level'], 5) == level] for level in (2, 3, 4, 5)}
     ranges = [(5, 6, 2), (9, 10, 3), (13, 14, 4), (17, 18, 5)]
-    mapping = expand_sections(ws, [(start, end, len(groups[level])) for start, end, level in ranges])
     set_widths(ws, [7, 40, 14, 28, 20, 24, 20, 40, 24, 40])
+    group_rows = {level: prepare_rows(ws, records, trade_name, {}, assets) for level, records in groups.items()}
+    mapping = expand_sections(ws, [(start, end, physical_rows(group_rows[level])) for start, end, level in ranges])
     for start, _, level in ranges:
-        write_rows(ws, mapping(start), groups[level], trade_name, {}, assets)
+        write_rows(ws, mapping(start), group_rows[level])
 
     ws = wb.worksheets[5]
     uses = select('sinomach')
-    mapping = expand_sections(ws, [(5, 11, len(uses))])
     set_widths(ws, [7, 38, 22, 30, 24, 14, 30, 24, 14, 28, 14, 38, 40])
-    write_rows(ws, mapping(5), uses, sinomach, {'goods_image': 5, 'services_image': 8}, assets)
+    use_rows = prepare_rows(ws, uses, sinomach, {'goods_image': 5, 'services_image': 8}, assets)
+    mapping = expand_sections(ws, [(5, 11, physical_rows(use_rows))])
+    write_rows(ws, mapping(5), use_rows)
 
     for ws in wb.worksheets[1:]:
         # 件数和分区名称原在 A 列，保持单行可向相邻空格延展，避免窄序号列换行。

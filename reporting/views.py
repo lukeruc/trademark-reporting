@@ -232,9 +232,11 @@ def submit_report(request):
         if not unit.editable:
             return redirect('workspace')
         issues = services.unit_errors(unit)
+    for issue in issues:
+        issue['fill_url'] = company_url(issue['enterprise'], issue.get('kind'))
     return render(request, 'reporting/submit.html', {
         'unit': unit, 'issues': issues, 'enterprise_count': unit.enterprises.count(),
-        'entry_count': Entry.objects.filter(enterprise__unit=unit).count(), 'section_by_kind': SECTION_BY_KIND,
+        'entry_count': Entry.objects.filter(enterprise__unit=unit).count(),
     }, status=422 if request.method == 'POST' and issues else 200)
 
 

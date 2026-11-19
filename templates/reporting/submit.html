@@ -9,7 +9,7 @@
 <ul class="issue-list">{% for issue in issues %}<li><strong>{{ issue.enterprise.name }}</strong><span>{{ issue.text }}</span>
 {% if issue.edit_enterprise %}<a href="{% url 'enterprise_edit' issue.enterprise.pk %}">去补充 →</a>
 {% elif issue.entry_id %}<a href="{% url 'entry_edit' issue.entry_id %}">去补充 →</a>
-{% else %}<a href="{% url 'enterprise' issue.enterprise.pk %}">去填报 →</a>{% endif %}</li>{% endfor %}</ul>
+{% else %}<a href="{{ issue.fill_url }}">去填报 →</a>{% endif %}</li>{% endfor %}</ul>
 {% else %}
 <div class="notice-strip"><strong>已通过填写完整性检查</strong><span>请确认本单位及下属企业信息完整、准确。提交后，整批数据锁定，修改须由管理员退回。</span></div>
 <form method="post">{% csrf_token %}<input type="hidden" name="revision" value="{{ unit.revision }}"><button type="submit" class="btn btn-primary">确认统一提交</button></form>
