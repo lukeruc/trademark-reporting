@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}填报工作台{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><span class="eyebrow">企业填报</span><h1>填报工作台</h1><p>{{ unit.name }} {% include "reporting/status.html" %}</p></div>
+  <div class="actions">
+    {% if unit.editable %}<a class="btn btn-primary" href="{% url 'submit' %}">检查并统一提交</a>
+    {% elif not unit.return_requested %}<a class="btn btn-outline-primary" href="{% url 'request_return' %}">请求管理员退回</a>{% endif %}
+  </div>
+</div>
+<div class="notice-strip">
+  {% if unit.status == 'submitted' %}<strong>本批数据已锁定</strong><span>第 {{ unit.current_submission.version }} 版已报送。修改须由管理员退回。</span>
+  {% elif unit.status == 'returned' %}<strong>请修改后重新提交</strong><span>退回说明：{{ unit.return_reason|default:"管理员已退回本批数据。" }}</span>
+  {% else %}<strong>先保存，再统一提交</strong><span>一次提交本单位负责范围内的全部企业、全部五张表。</span>{% endif %}
+</div>
+<div class="section-heading"><div><h2>填报企业 <span class="count">{{ companies|length }}</span></h2><p class="muted">{% if unit.kind == 'hq' %}填写公司本部的五部分信息。{% else %}本企业及下属企业分别填写，由本账号统一报送。{% endif %}</p></div>
+{% if unit.editable and unit.kind != 'hq' %}<a class="btn btn-outline-primary" href="{% url 'enterprise_new' %}">＋ 添加下属企业</a>{% endif %}</div>
+<div class="enterprise-grid">
+{% for row in companies %}
+<article class="panel enterprise-card">
+  <div class="card-kicker"><span>{{ row.company.level }} 级企业 · {{ row.company.nature|default:"性质待填写" }}</span>{% if row.company.is_primary %}<span class="pill">本企业</span>{% endif %}</div>
+  <h3>{{ row.company.name }}</h3>
+  <p class="muted">{{ row.entry_count }} 条明细 · {% if row.issues %}<span>{{ row.issues }} 项待补充</span>{% else %}<span class="text-success">已具备提交条件</span>{% endif %}</p>
+  <div class="card-actions"><a class="btn btn-primary" href="{% url 'enterprise' row.company.pk %}">{% if unit.editable %}进入填报{% else %}查看数据{% endif %} <span aria-hidden="true">→</span></a>
+  {% if unit.editable %}<a href="{% url 'enterprise_edit' row.company.pk %}">企业信息</a>{% endif %}</div>
+</article>
+{% endfor %}
+</div>
+{% if history %}
+<section class="panel mt-4"><h2>报送记录</h2>
+  <div class="history-list">{% for snapshot in history %}<a href="{% url 'submission' snapshot.pk %}"><span>第 {{ snapshot.version }} 版</span><span>{{ snapshot.submitted_at|date:"Y-m-d H:i" }}</span><span>查看报送内容 →</span></a>{% endfor %}</div>
+</section>{% endif %}
+{% endblock %}

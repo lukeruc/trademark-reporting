@@ -1,0 +1,48 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %} · 国机工程</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{% static 'vendor/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <script defer src="{% static 'js/app.js' %}"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">跳转到正文</a>
+<header class="site-header">
+  <a class="brand" href="{% url 'home' %}">
+    <span class="company-logo" role="img" aria-label="中国机械工业工程集团有限公司 Logo"></span>
+    <span class="brand-text"><strong>{{ company_name }}</strong><span>{{ app_name }}</span></span>
+  </a>
+  {% if user.is_authenticated %}
+  <div class="account-area">
+    <span class="role-label">{% if user.is_manager %}管理员{% else %}企业填报{% endif %}</span>
+    <span class="username">{{ user.username }}</span>
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="text-button" type="submit">退出</button></form>
+  </div>
+  {% endif %}
+</header>
+{% if user.is_authenticated %}
+<nav class="top-nav" aria-label="主导航">
+  <div class="nav-inner">
+  {% if user.is_manager %}
+    <a href="{% url 'dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}>报送管理</a>
+    <a href="{% url 'aggregate' %}" {% if request.resolver_match.url_name == 'aggregate' %}aria-current="page"{% endif %}>汇总与导出</a>
+    <a href="{% url 'entry_config' %}" {% if request.resolver_match.url_name == 'entry_config' %}aria-current="page"{% endif %}>入口二维码</a>
+  {% else %}
+    <a href="{% url 'workspace' %}" aria-current="page">填报工作台</a>
+  {% endif %}
+  <span class="nav-year">2026 年度 · 商标字号统计</span>
+  </div>
+</nav>
+{% endif %}
+<main id="main" class="{% block main_class %}main-container{% endblock %}">
+  {% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }}" role="status">{{ message }}</div>{% endfor %}
+  {% block content %}{% endblock %}
+</main>
+<footer class="site-footer">{{ company_name }}<span>{{ app_name }}</span></footer>
+</body>
+</html>

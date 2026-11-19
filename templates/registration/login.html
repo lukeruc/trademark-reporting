@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}登录{% endblock %}
+{% block main_class %}login-main{% endblock %}
+{% block content %}
+<div class="login-layout">
+  <section class="login-intro">
+    <span class="eyebrow">2026 · 企业商标与字号统计</span>
+    <h1>信息集中填报<br>统一整理报送</h1>
+    <p>公司本部及各三级企业在此完成商标、字号及相关使用情况的统计填报。</p>
+    <div class="intro-decoration" aria-hidden="true"><span>商标</span><span>字号</span><span>使用情况</span></div>
+  </section>
+  <section class="panel login-card">
+    <span class="eyebrow">填报入口</span>
+    <h2>账号登录</h2>
+    <p class="muted">请使用管理员分配的账号和密码。</p>
+    <form method="post">{% csrf_token %}
+      {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+      {% for field in form %}<div class="field-block"><label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <button type="submit" class="btn btn-primary w-100 mt-2">登录</button>
+    </form>
+    <p class="login-note">账号或密码问题请联系管理员。</p>
+  </section>
+</div>
+{% endblock %}

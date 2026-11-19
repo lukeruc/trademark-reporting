@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}报送管理{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">管理员工作台</span><h1>报送管理</h1><p class="muted">查看各单位报送进度，统一管理已提交信息。</p></div><a class="btn btn-primary" href="{% url 'account_create' %}">＋ 创建填报账号</a></div>
+<div class="stats-grid">
+  <div class="panel stat"><span>报送单位</span><strong>{{ total }}</strong></div>
+  <div class="panel stat"><span>已提交</span><strong>{{ counts.submitted }}</strong></div>
+  <div class="panel stat"><span>草稿 / 已退回</span><strong>{{ counts.draft }} <small>/ {{ counts.returned }}</small></strong></div>
+  <div class="panel stat"><span>退回请求</span><strong>{{ requests_count }}</strong></div>
+</div>
+<section class="panel">
+<div class="section-heading"><h2>企业账号与报送状态</h2><a href="{% url 'aggregate' %}">查看汇总 →</a></div>
+{% if units %}
+<div class="table-responsive"><table class="table align-middle management-table"><thead><tr><th>报送单位</th><th>账号</th><th>状态</th><th>最近报送</th><th>操作</th></tr></thead><tbody>
+{% for unit in units %}<tr><td><strong>{{ unit.name }}</strong><small class="d-block muted">{{ unit.get_kind_display }}</small>{% if unit.return_requested %}<p class="request-note">退回请求：{{ unit.return_request_note|default:"请求退回修改" }}</p>{% endif %}</td><td><code>{{ unit.user.username }}</code></td><td>{% include "reporting/status.html" %}</td><td>{% if unit.current_submission %}第 {{ unit.current_submission.version }} 版<small class="d-block muted">{{ unit.current_submission.submitted_at|date:"Y-m-d H:i" }}</small>{% else %}<span class="muted">尚未报送</span>{% endif %}</td><td><div class="row-actions">
+{% if unit.current_submission %}<a href="{% url 'submission' unit.current_submission_id %}">查看报送</a>{% endif %}
+<a href="{% url 'account_manage' unit.pk %}">企业信息</a>
+{% if unit.status == 'submitted' %}<a href="{% url 'return_report' unit.pk %}">退回</a>{% endif %}
+{% if not unit.current_submission %}<span class="muted">等待提交</span>{% endif %}
+</div></td></tr>{% endfor %}
+</tbody></table></div>
+{% else %}<div class="empty-state"><span class="empty-symbol">＋</span><h3>从创建填报账号开始</h3><p>分别为本部及各三级企业创建账号。</p><a class="btn btn-outline-primary" href="{% url 'account_create' %}">创建第一个账号</a></div>{% endif %}
+</section>
+{% endblock %}

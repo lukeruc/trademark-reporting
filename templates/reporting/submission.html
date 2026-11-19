@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}报送内容 · 第 {{ snapshot.version }} 版{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'home' %}">← 返回工作台</a>
+<div class="page-heading"><div><span class="eyebrow">已报送版本 · 只读</span><h1>{{ report.unit.name }}</h1><p>第 {{ snapshot.version }} 版 · {{ snapshot.submitted_at|date:"Y-m-d H:i" }} {% include "reporting/status.html" %}</p></div>
+{% if user.is_manager and unit.status == 'submitted' and unit.current_submission_id == snapshot.id %}<a class="btn btn-outline-primary" href="{% url 'return_report' unit.pk %}">退回整批数据</a>{% endif %}
+</div>
+{% if unit.status != 'submitted' or unit.current_submission_id != snapshot.id %}<div class="notice-strip"><strong>历史报送内容</strong><span>此版本当前不参与正式汇总。</span></div>{% endif %}
+{% include "reporting/payload.html" %}
+{% include "reporting/notes.html" %}
+{% endblock %}

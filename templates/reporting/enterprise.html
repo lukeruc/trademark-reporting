@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ company.name }}{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'workspace' %}">← 返回填报工作台</a>
+<div class="page-heading">
+  <div><span class="eyebrow">填报企业</span><h1>{{ company.name }}</h1><p>{{ company.level }} 级 · {{ company.nature|default:"性质待填写" }} {% include "reporting/status.html" %}</p></div>
+  {% if unit.editable %}<div class="actions"><a class="btn btn-outline-primary" href="{% url 'enterprise_edit' company.pk %}">编辑企业信息</a>{% if not company.is_primary %}<a class="subtle-danger" href="{% url 'enterprise_delete' company.pk %}">删除企业</a>{% endif %}</div>{% endif %}
+</div>
+<div class="report-layout">
+  <nav class="section-nav" aria-label="填报内容">
+    {% for tab in sections %}<a href="?section={{ tab.key }}" {% if tab.key == section.key %}aria-current="page"{% endif %}><span>{{ tab.number }}</span>{{ tab.label }}</a>{% endfor %}
+  </nav>
+  <div class="section-content">
+    <div class="section-heading"><h2>{{ section.label }}</h2></div>
+    {% for group in groups %}
+    <section class="panel record-group">
+      <div class="section-heading"><div><h3>{{ group.label }} <span class="count">{% if group.empty %}无{% else %}{{ group.entries|length }}{% endif %}</span></h3></div>
+        {% if unit.editable %}<a class="btn btn-sm btn-outline-primary" href="{% url 'entry_new' company.pk group.kind %}">＋ 新增明细</a>{% endif %}
+      </div>
+      {% for entry in group.entries %}
+        <article class="record">
+          <div class="record-heading"><h4>{{ forloop.counter }}. {{ entry.title|truncatechars:65 }}</h4>
+          {% if unit.editable %}<div class="actions"><a href="{% url 'entry_edit' entry.id %}">编辑</a><a class="subtle-danger" href="{% url 'entry_delete' entry.id %}">删除</a></div>{% endif %}</div>
+          {% if entry.issues and unit.editable %}<p class="draft-hint">草稿已保存，{{ entry.issues|length }} 项待补充</p>{% endif %}
+          <details><summary>展开明细</summary>{% include "reporting/entry_fields.html" %}</details>
+        </article>
+      {% empty %}
+        <div class="empty-state">
+        {% if group.empty %}<span class="empty-symbol" aria-hidden="true">✓</span><h4>已确认：无</h4>
+        {% else %}<span class="empty-symbol" aria-hidden="true">—</span><h4>尚未填写</h4><p>{% if group.kind == 'sinomach' %}有相关使用情况请新增明细；本企业及下属参股企业均无相关使用时，可直接确认“无”。{% elif group.kind == 'trade_name' %}无字号及相关使用、授权或违规情况时，可直接确认“无”；有相关情况请新增明细。{% else %}有相关信息请新增明细；没有时请确认“无”。{% endif %}</p>{% endif %}
+        {% if group.can_empty and unit.editable %}
+          <form method="post" action="{% url 'confirm_empty' company.pk group.kind %}">{% csrf_token %}<input type="hidden" name="revision" value="{{ unit.revision }}">
+          {% if group.empty %}<input type="hidden" name="action" value="clear"><button class="text-button" type="submit">取消“无”确认</button>
+          {% else %}<button class="btn btn-outline-primary" type="submit">确认“无”</button>{% endif %}</form>
+        {% endif %}
+        </div>
+      {% endfor %}
+    </section>
+    {% endfor %}
+    {% include "reporting/notes.html" %}
+  </div>
+</div>
+{% endblock %}

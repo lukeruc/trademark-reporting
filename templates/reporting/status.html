@@ -1,0 +1,2 @@
+<span class="status status-{{ unit.status }}">{{ unit.get_status_display }}</span>
+{% if unit.return_requested %}<span class="status status-request">已请求退回</span>{% endif %}

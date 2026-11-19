@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}汇总与导出{% endblock %}
+{% block content %}
+<div class="page-heading"><div><span class="eyebrow">正式报送数据</span><h1>汇总与导出</h1><p class="muted">{{ unit_count }} 个已提交单位 · {{ enterprise_count }} 家实际企业</p></div><a class="btn btn-primary" href="{% url 'export' %}">导出完整 Excel</a></div>
+<div class="notice-strip"><strong>导出全部六张工作表</strong><span>第 1 张保留空白模板，第 2—6 张填入当前已提交的数据。被退回的单位重报后再纳入。</span></div>
+{% for report in reports %}{% include "reporting/payload.html" %}{% empty %}
+<div class="panel empty-state"><span class="empty-symbol">—</span><h2>暂无已提交数据</h2><p>企业统一提交后，会在这里显示。当前仍可导出空白统计模板。</p></div>
+{% endfor %}
+{% include "reporting/notes.html" %}
+{% endblock %}

@@ -1,0 +1,14 @@
+# Python 3.12；在 conda 环境中安装。包含运行依赖及其固定版本。
+Django==5.2.19
+asgiref==3.13.0
+sqlparse==0.6.1
+psycopg[binary]==3.3.9
+psycopg-binary==3.3.9
+typing_extensions==4.16.0
+openpyxl==3.1.5
+et_xmlfile==2.0.0
+Pillow==13.0.0
+gunicorn==27.0.1
+qrcode==8.2
+pypinyin==0.55.0
+whitenoise==6.12.0

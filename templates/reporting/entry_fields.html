@@ -1,0 +1,5 @@
+<dl class="data-grid">
+{% for item in entry.fields %}
+<div><dt>{{ item.label }}</dt><dd>{% if item.is_image %}<img class="mark-image" src="{% url 'mark_image' item.value %}" alt="{{ item.label }}" loading="lazy">{% else %}{{ item.value|linebreaksbr }}{% endif %}</dd></div>
+{% empty %}<div><dd class="muted">尚未填写字段内容。</dd></div>{% endfor %}
+</dl>

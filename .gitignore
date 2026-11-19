@@ -1,0 +1,9 @@
+.conda/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+var/
+staticfiles/
+*.log

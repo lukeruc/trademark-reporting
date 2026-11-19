@@ -1,0 +1,10 @@
+{% for company in report.enterprises %}
+<article class="panel snapshot-company">
+  <div class="section-heading"><div><h2>{{ company.name }}</h2><p class="muted">{{ company.level }} 级 · {{ company.nature }}</p></div><span class="pill">{{ report.unit.name }}</span></div>
+  {% for group in company.groups %}
+  <details class="snapshot-group"><summary>{{ group.label }} <span class="count">{% if group.empty %}无{% else %}{{ group.entries|length }} 条{% endif %}</span></summary>
+    {% for entry in group.entries %}<div class="record"><h4>{{ forloop.counter }}. {{ entry.title|truncatechars:65 }}</h4>{% include "reporting/entry_fields.html" %}</div>
+    {% empty %}<p class="muted">{% if group.empty %}{% if group.kind == 'sinomach' %}已确认无相关使用。{% elif group.kind == 'trade_name' %}已确认无字号及相关情况。{% else %}已确认无相关记录。{% endif %}{% else %}无明细。{% endif %}</p>{% endfor %}
+  </details>{% endfor %}
+</article>
+{% endfor %}

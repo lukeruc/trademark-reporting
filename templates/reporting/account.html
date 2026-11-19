@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}企业信息{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'dashboard' %}">← 返回报送管理</a>
+<section class="panel narrow-panel">
+  <span class="eyebrow">账号管理</span><h1>企业信息</h1>
+  <dl class="data-grid">
+    <div><dt>企业名称</dt><dd>{{ unit.name }}</dd></div>
+    <div><dt>当前用户名</dt><dd><code>{{ unit.user.username }}</code></dd></div>
+  </dl>
+  <div class="mt-4">
+    <h2>重置用户名</h2>
+    <p>按企业全称的拼音首字母重新生成，重名时自动加数字后缀。</p>
+    <form method="post">{% csrf_token %}
+      <input type="hidden" name="account_version" value="{{ account_version }}">
+      <input type="hidden" name="action" value="username">
+      <button class="btn btn-outline-primary" type="submit">重置用户名</button>
+    </form>
+  </div>
+  <div class="form-actions">
+    <div><h2>重置密码</h2><p>生成新的 8 位字母数字密码，原密码立即失效。请保存新密码并交付填报人。</p>
+      <form method="post">{% csrf_token %}
+        <input type="hidden" name="account_version" value="{{ account_version }}">
+        <input type="hidden" name="action" value="password">
+        <button class="btn btn-outline-primary" type="submit">重置密码</button>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

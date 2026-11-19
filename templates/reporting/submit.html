@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}检查并统一提交{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'workspace' %}">← 返回填报工作台</a>
+<div class="page-heading"><div><span class="eyebrow">统一报送</span><h1>检查并统一提交</h1><p>{{ unit.name }}</p></div></div>
+<section class="panel"><h2>本次报送范围</h2><p>{{ enterprise_count }} 家企业 · {{ entry_count }} 条明细 · 全部五张填报表</p>
+{% if issues %}
+<div class="alert alert-warning">还有 {{ issues|length }} 项需要补充。已保存的草稿不会丢失。</div>
+<ul class="issue-list">{% for issue in issues %}<li><strong>{{ issue.enterprise.name }}</strong><span>{{ issue.text }}</span>
+{% if issue.edit_enterprise %}<a href="{% url 'enterprise_edit' issue.enterprise.pk %}">去补充 →</a>
+{% elif issue.entry_id %}<a href="{% url 'entry_edit' issue.entry_id %}">去补充 →</a>
+{% else %}<a href="{% url 'enterprise' issue.enterprise.pk %}">去填报 →</a>{% endif %}</li>{% endfor %}</ul>
+{% else %}
+<div class="notice-strip"><strong>已通过填写完整性检查</strong><span>请确认本单位及下属企业信息完整、准确。提交后，整批数据锁定，修改须由管理员退回。</span></div>
+<form method="post">{% csrf_token %}<input type="hidden" name="revision" value="{{ unit.revision }}"><button type="submit" class="btn btn-primary">确认统一提交</button></form>
+{% endif %}
+</section>
+{% endblock %}

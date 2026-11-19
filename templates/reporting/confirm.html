@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ back_url }}">← 返回</a>
+<section class="panel narrow-panel"><span class="eyebrow">操作确认</span><h1>{{ title }}</h1><p>{{ description }}</p>
+<form method="post">{% csrf_token %}
+  <input type="hidden" name="revision" value="{{ unit.revision }}">
+  {% if submission_id %}<input type="hidden" name="submission_id" value="{{ submission_id }}">{% endif %}
+  {% if note_label %}<div class="field-block"><label for="note" class="form-label">{{ note_label }}</label><textarea name="note" id="note" class="form-control" rows="4" maxlength="20000"></textarea></div>{% endif %}
+  <div class="form-actions"><button type="submit" class="btn {% if danger %}btn-danger{% else %}btn-primary{% endif %}">{{ button }}</button><a class="btn btn-light" href="{{ back_url }}">取消</a></div>
+</form></section>
+{% endblock %}

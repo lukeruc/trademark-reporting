@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}入口二维码{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h1>入口二维码</h1><p class="muted">可直接截图，发送给填报人。</p></div></div>
+<section class="panel narrow-panel qr-preview">
+<h2>{{ company_name }}</h2>
+<p>{{ app_name }}</p>
+<img class="qr-image" src="{% url 'entry_qr' %}" alt="登录二维码">
+<p class="entry-url">{{ entry_url }}</p>
+<p class="muted">连接公司内网后，扫码登录。</p>
+</section>
+{% endblock %}
