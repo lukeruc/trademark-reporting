@@ -22,6 +22,7 @@ urlpatterns = [
     path('manage/', views.dashboard, name='dashboard'),
     path('manage/accounts/new/', views.account_create, name='account_create'),
     path('manage/unit/<int:pk>/account/', views.account_manage, name='account_manage'),
+    path('manage/unit/<int:pk>/account/delete/', views.account_delete, name='account_delete'),
     path('manage/unit/<int:pk>/return/', views.return_report, name='return_report'),
     path('manage/aggregate/', views.aggregate, name='aggregate'),
     path('manage/export/', views.export_report, name='export'),

@@ -26,5 +26,10 @@
       </form>
     </div>
   </div>
+  <div class="form-actions">
+    <div><h2>删除账号</h2><p>同时删除本企业及该账号下属企业的全部填报数据、历史报送和图样。删除后无法恢复。</p>
+      <a class="btn btn-outline-danger" href="{% url 'account_delete' unit.pk %}">前往删除确认</a>
+    </div>
+  </div>
 </section>
 {% endblock %}

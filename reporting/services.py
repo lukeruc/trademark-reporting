@@ -2,10 +2,11 @@ from contextlib import contextmanager
 from datetime import date
 from functools import wraps
 import hashlib
+import logging
 
 from django.db import IntegrityError, transaction
 from django.db.models import Max
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from django.utils.crypto import constant_time_compare
 
 from .credentials import USERNAME_MAX_LENGTH, account_version, enterprise_initials, random_password
@@ -37,7 +38,7 @@ def check_revision(unit, revision):
 def editable_unit(request):
     # 所有业务写入均先锁同一责任单位行，和提交/退回共用一把数据库锁。
     with transaction.atomic():
-        unit = ReportingUnit.objects.select_for_update().get(user=request.user)
+        unit = get_object_or_404(ReportingUnit.objects.select_for_update(), user=request.user)
         if not unit.editable:
             raise Conflict('本单位已提交，数据已锁定。请请求管理员退回后再修改。')
         check_revision(unit, request.POST.get('revision'))
@@ -76,7 +77,7 @@ def create_account(name, kind):
 
 @transaction.atomic
 def reset_account(unit_id, action, version):
-    unit = ReportingUnit.objects.select_for_update().get(pk=unit_id)
+    unit = get_object_or_404(ReportingUnit.objects.select_for_update(), pk=unit_id)
     user = User.objects.select_for_update().get(pk=unit.user_id)
     if user.is_manager or action not in ('username', 'password'):
         raise Conflict('无法重置此账号，请返回企业信息页。')
@@ -113,6 +114,43 @@ def reset_account(unit_id, action, version):
     LoginThrottle.objects.filter(key__in=keys).delete()
     unit.user = user
     return unit, password, True
+
+
+@transaction.atomic
+def delete_account(unit_id, revision, version, confirm_name, confirm_username, confirm_delete):
+    # 和保存、报送、退回、账号重置共用单位行锁，确认后有任何变化均须重新核对。
+    unit = get_object_or_404(ReportingUnit.objects.select_for_update(), pk=unit_id)
+    user = User.objects.select_for_update().get(pk=unit.user_id)
+    if user.is_manager:
+        raise Conflict('管理员账号不能通过此功能删除。')
+    check_revision(unit, revision)
+    if not constant_time_compare(account_version(user), str(version or '')):
+        raise Conflict('账号信息已更新，请返回企业信息页，重新核对后再删除。')
+    if confirm_name != unit.name or confirm_username != user.username or confirm_delete is not True:
+        raise Conflict('删除确认信息不一致，请重新核对企业全称和用户名。')
+
+    files = [(asset.file.storage, asset.file.name) for asset in unit.images.all() if asset.file.name]
+    unit.current_submission = None
+    unit.save(update_fields=['current_submission'])
+    unit.submissions.all().delete()
+    unit.images.all().delete()
+    unit.delete()  # 企业及其明细由外键级联删除。
+    LoginThrottle.objects.filter(key=hashlib.sha256(user.username.encode()).hexdigest()).delete()
+    user.delete()  # 原有登录会话无法再通过用户认证。
+
+    failed_files = []
+
+    def remove_files():
+        # 数据库回滚时不能提前移除图样；逐个清理，单个文件失败不妨碍其余文件。
+        for storage, name in files:
+            try:
+                storage.delete(name)
+            except OSError:
+                failed_files.append(name)
+                logging.getLogger(__name__).exception('账号已删除，但图样文件清理失败：%s', name)
+
+    transaction.on_commit(remove_files)
+    return failed_files
 
 
 def save_entry(form, enterprise, entry=None):
@@ -206,7 +244,7 @@ def payload_for(unit):
 
 @transaction.atomic
 def submit(unit_id, revision):
-    unit = ReportingUnit.objects.select_for_update().get(pk=unit_id)
+    unit = get_object_or_404(ReportingUnit.objects.select_for_update(), pk=unit_id)
     if unit.status == ReportingUnit.Status.SUBMITTED:
         return unit.current_submission, []  # 重复点击幂等
     check_revision(unit, revision)
@@ -231,7 +269,7 @@ def submit(unit_id, revision):
 
 @transaction.atomic
 def request_return(unit_id, revision, note):
-    unit = ReportingUnit.objects.select_for_update().get(pk=unit_id)
+    unit = get_object_or_404(ReportingUnit.objects.select_for_update(), pk=unit_id)
     if unit.status != ReportingUnit.Status.SUBMITTED:
         raise Conflict('当前数据尚未提交或已被退回，请刷新页面。')
     if unit.return_requested:
@@ -244,7 +282,7 @@ def request_return(unit_id, revision, note):
 
 @transaction.atomic
 def return_submission(unit_id, submission_id, reason):
-    unit = ReportingUnit.objects.select_for_update().get(pk=unit_id)
+    unit = get_object_or_404(ReportingUnit.objects.select_for_update(), pk=unit_id)
     if unit.status != ReportingUnit.Status.SUBMITTED or str(unit.current_submission_id) != str(submission_id):
         raise Conflict('报送状态或版本已变化，请刷新后再退回。')
     unit.status = ReportingUnit.Status.RETURNED
@@ -254,12 +292,13 @@ def return_submission(unit_id, submission_id, reason):
     unit.save()
 
 
-def aggregate_payloads():
+def aggregate_payloads(*, lock=False):
     # 一条 SQL 同时读取状态和当前快照，避免并发退回导致半旧半新的汇总。
-    return list(
-        ReportingUnit.objects.filter(status=ReportingUnit.Status.SUBMITTED)
-        .order_by('kind', 'id').values_list('current_submission__payload', flat=True)
-    )
+    units = ReportingUnit.objects.filter(status=ReportingUnit.Status.SUBMITTED).order_by('kind', 'id')
+    if lock:
+        # 导出完成前保留图样所属单位，避免删除账号使正在生成的文件缺图。
+        units = units.select_for_update(of=('self',))
+    return [payload for _, payload in units.values_list('id', 'current_submission__payload')]
 
 
 def present_entry(entry):

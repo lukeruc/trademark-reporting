@@ -8,7 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 
-from .credentials import enterprise_initials
+from .credentials import account_version, enterprise_initials
 from .models import Enterprise, LoginThrottle, ReportingUnit
 from .schema import ENTERPRISE_FIELDS, MARK_KINDS, SCHEMAS, YES_NO
 
@@ -83,6 +83,36 @@ class AccountForm(StyledForm, forms.Form):
         if kind == ReportingUnit.Kind.HEADQUARTERS and ReportingUnit.objects.filter(kind=kind).exists():
             raise ValidationError('本部填报账号已经存在。')
         return kind
+
+
+class AccountDeleteForm(StyledForm, forms.Form):
+    confirm_name = forms.CharField(label='手动输入企业全称', max_length=300, strip=False,
+                                  widget=forms.TextInput(attrs={'autocomplete': 'off'}))
+    confirm_username = forms.CharField(label='手动输入用户名', max_length=150, strip=False,
+                                      widget=forms.TextInput(attrs={'autocomplete': 'off'}))
+    confirm_delete = forms.BooleanField(label='我确认永久删除此账号及其全部数据，且无法恢复。')
+    revision = forms.CharField(widget=forms.HiddenInput)
+    account_version = forms.CharField(widget=forms.HiddenInput)
+
+    def __init__(self, *args, unit, **kwargs):
+        self.unit = unit
+        kwargs.setdefault('initial', {
+            'revision': unit.revision, 'account_version': account_version(unit.user),
+        })
+        super().__init__(*args, **kwargs)
+        self.style_fields()
+
+    def clean_confirm_name(self):
+        value = self.cleaned_data['confirm_name']
+        if value != self.unit.name:
+            raise ValidationError('企业全称不一致，请核对后完整输入。')
+        return value
+
+    def clean_confirm_username(self):
+        value = self.cleaned_data['confirm_username']
+        if value != self.unit.user.username:
+            raise ValidationError('用户名不一致，请核对后完整输入。')
+        return value
 
 
 class EnterpriseForm(StyledForm, forms.ModelForm):

@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
 from django.core.exceptions import PermissionDenied
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -15,7 +15,7 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 from . import services
 from .credentials import account_version
 from .entrypoint import qr_image_path
-from .forms import AccountForm, EnterpriseForm, EntryForm, LoginForm
+from .forms import AccountDeleteForm, AccountForm, EnterpriseForm, EntryForm, LoginForm
 from .models import Enterprise, Entry, EntryConfig, MarkImage, ReportingUnit, Submission
 from .schema import EMPTY_ALLOWED_KINDS, SCHEMAS, SECTIONS, SECTION_BY_KIND, SINOMACH_NOTES
 
@@ -58,7 +58,7 @@ def company_url(company, kind=None):
 @reporter_only
 @require_GET
 def workspace(request):
-    unit = request.user.reporting_unit
+    unit = get_object_or_404(ReportingUnit, user=request.user)
     companies = []
     for company in unit.enterprises.prefetch_related('entries'):
         errors = services.enterprise_errors(company)
@@ -72,7 +72,7 @@ def workspace(request):
 @reporter_only
 @services.conflict_page
 def enterprise_edit(request, pk=None):
-    unit = request.user.reporting_unit
+    unit = get_object_or_404(ReportingUnit, user=request.user)
     company = get_object_or_404(Enterprise, pk=pk, unit=unit) if pk else Enterprise(unit=unit, level=4)
     if not pk and unit.kind == 'hq':
         raise PermissionDenied('本部账号负责本部企业的信息。')
@@ -100,7 +100,7 @@ def enterprise_edit(request, pk=None):
 @reporter_only
 @services.conflict_page
 def enterprise_delete(request, pk):
-    unit = request.user.reporting_unit
+    unit = get_object_or_404(ReportingUnit, user=request.user)
     company = get_object_or_404(Enterprise, pk=pk, unit=unit, is_primary=False)
     if request.method == 'POST':
         with services.editable_unit(request) as unit:
@@ -118,7 +118,7 @@ def enterprise_delete(request, pk):
 @reporter_only
 @require_GET
 def enterprise_detail(request, pk):
-    unit = request.user.reporting_unit
+    unit = get_object_or_404(ReportingUnit, user=request.user)
     company = get_object_or_404(Enterprise, pk=pk, unit=unit)
     key = request.GET.get('section', 'domestic')
     section = next((s for s in SECTIONS if s['key'] == key), None)
@@ -162,7 +162,7 @@ def confirm_empty(request, pk, kind):
 @reporter_only
 @services.conflict_page
 def entry_edit(request, pk, kind=None):
-    unit = request.user.reporting_unit
+    unit = get_object_or_404(ReportingUnit, user=request.user)
     entry = None
     if kind is None:
         entry = get_object_or_404(Entry.objects.select_related('enterprise'), pk=pk, enterprise__unit=unit)
@@ -203,7 +203,7 @@ def entry_edit(request, pk, kind=None):
 @reporter_only
 @services.conflict_page
 def entry_delete(request, pk):
-    unit = request.user.reporting_unit
+    unit = get_object_or_404(ReportingUnit, user=request.user)
     entry = get_object_or_404(Entry.objects.select_related('enterprise'), pk=pk, enterprise__unit=unit)
     company, kind = entry.enterprise, entry.kind
     if request.method == 'POST':
@@ -222,7 +222,7 @@ def entry_delete(request, pk):
 @reporter_only
 @services.conflict_page
 def submit_report(request):
-    unit = request.user.reporting_unit
+    unit = get_object_or_404(ReportingUnit, user=request.user)
     if request.method == 'POST':
         snapshot, issues = services.submit(unit.id, request.POST.get('revision'))
         if snapshot:
@@ -243,7 +243,7 @@ def submit_report(request):
 @reporter_only
 @services.conflict_page
 def request_return_view(request):
-    unit = request.user.reporting_unit
+    unit = get_object_or_404(ReportingUnit, user=request.user)
     if request.method == 'POST':
         note = request.POST.get('note', '')[:20000]
         services.request_return(unit.id, request.POST.get('revision'), note)
@@ -353,6 +353,34 @@ def return_report(request, pk):
 
 
 @manager_only
+@require_http_methods(['GET', 'POST'])
+@services.conflict_page
+def account_delete(request, pk):
+    unit = get_object_or_404(ReportingUnit.objects.select_related('user'), pk=pk, user__is_superuser=False)
+    form = AccountDeleteForm(request.POST if request.method == 'POST' else None, unit=unit)
+    if request.method == 'POST' and form.is_valid():
+        data = form.cleaned_data
+        failed_files = services.delete_account(
+            unit.pk, data['revision'], data['account_version'],
+            data['confirm_name'], data['confirm_username'], data['confirm_delete'],
+        )
+        if failed_files:
+            messages.warning(request, f'“{unit.name}”账号及填报数据已删除，但部分图样文件清理失败，请联系服务器维护人员。')
+        else:
+            messages.success(request, f'已永久删除“{unit.name}”的账号及全部关联数据。')
+        return redirect('dashboard')
+    return render(request, 'reporting/account_delete.html', {
+        'unit': unit, 'form': form,
+        'counts': {
+            'enterprises': unit.enterprises.count(),
+            'entries': Entry.objects.filter(enterprise__unit=unit).count(),
+            'submissions': unit.submissions.count(),
+            'images': unit.images.count(),
+        },
+    }, status=422 if request.method == 'POST' else 200)
+
+
+@manager_only
 @require_GET
 def aggregate(request):
     payloads = services.aggregate_payloads()
@@ -367,7 +395,8 @@ def aggregate(request):
 @require_GET
 def export_report(request):
     from .exporter import export_workbook
-    output = export_workbook(services.aggregate_payloads())
+    with transaction.atomic():
+        output = export_workbook(services.aggregate_payloads(lock=True))
     return FileResponse(output, as_attachment=True,
                         filename=f'2026年商标字号统计表_{timezone.localdate():%Y%m%d}.xlsx',
                         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
