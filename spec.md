@@ -1,6 +1,6 @@
 # 商标字号统计规格说明
 
-版本：v1.11
+版本：v1.12
 
 日期：2026-11-20
 
@@ -389,7 +389,7 @@
 | Excel | openpyxl；Pillow 支持图样和模板图片处理 |
 | 入口二维码 | qrcode |
 | 企业名称转账号 | pypinyin |
-| 应用运行 | Gunicorn |
+| 应用运行 | Gunicorn，gthread 模式，3 个工作进程、每个进程 4 个线程 |
 | 网页入口及静态文件 | Gunicorn + WhiteNoise；Nginx 可选 |
 | 启动方式 | 手动激活 conda 后运行 start.sh，可在 tmux 中保持运行 |
 

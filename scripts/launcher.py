@@ -66,7 +66,9 @@ def main():
         print(f'访问地址：http://{address}:{int(os.getenv("APP_PORT", "7070"))}/', flush=True)
     os.execv(sys.executable, [
         sys.executable, '-m', 'gunicorn', 'config.wsgi:application',
-        '--bind', bind, '--workers', '3', '--timeout', '120',
+        # 线程模式单独处理尚未发送 HTTP 数据的连接，避免空连接阻塞同步工作进程。
+        '--bind', bind, '--workers', '3', '--worker-class', 'gthread', '--threads', '4',
+        '--timeout', '120',
         '--access-logfile', '-', '--error-logfile', '-',
     ])
 
