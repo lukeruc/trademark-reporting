@@ -10,7 +10,7 @@ from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 
 from .credentials import enterprise_initials
 from .models import Enterprise, LoginThrottle, ReportingUnit
-from .schema import MARK_KINDS, SCHEMAS
+from .schema import ENTERPRISE_FIELDS, MARK_KINDS, SCHEMAS, YES_NO
 
 
 class StyledForm:
@@ -120,20 +120,26 @@ class EnterpriseForm(StyledForm, forms.ModelForm):
 class EntryForm(StyledForm, forms.Form):
     """草稿允许空值；正式提交使用相同字段解析并补做条件必填校验。"""
 
-    def __init__(self, *args, kind, enterprise=None, stored=None, complete=False, **kwargs):
+    def __init__(self, *args, kind, stored=None, complete=False, **kwargs):
         self.kind = kind
         self.stored = stored or {}
         self.complete = complete
         initial = {k: v for k, v in self.stored.items()
-                   if k not in [f.key for f in SCHEMAS[kind][1] if f.kind == 'image']}
-        if not stored and enterprise:
-            initial.update(holder_name=enterprise.name, holder_level=enterprise.level)
+                   if k not in ENTERPRISE_FIELDS
+                   and k not in [f.key for f in SCHEMAS[kind][1] if f.kind == 'image']}
         kwargs.setdefault('initial', initial)
         super().__init__(*args, **kwargs)
         for spec in SCHEMAS[kind][1]:
+            if spec.key in ENTERPRISE_FIELDS:
+                continue
             options = {'label': spec.label, 'required': False, 'help_text': spec.help}
             if spec.kind == 'choice':
-                field = forms.ChoiceField(choices=[('', '请选择 / 不适用')] + [(x, x) for x in spec.options], **options)
+                choices = [(x, x) for x in spec.options]
+                if spec.options != YES_NO:
+                    choices.insert(0, ('', '请选择 / 不适用'))
+                field = forms.ChoiceField(choices=choices, **options)
+                if spec.options == YES_NO:
+                    field.widget.attrs['data-yes-no'] = ''
             elif spec.kind == 'date':
                 field = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}), **options)
             elif spec.kind == 'level':
@@ -201,7 +207,7 @@ class EntryForm(StyledForm, forms.Form):
             if self.kind.startswith('unregistered'):
                 required += ['use_type']
             else:
-                required += ['registration_class', 'registration_number', 'valid_from', 'valid_until', 'holder_name', 'holder_level']
+                required += ['registration_class', 'registration_number', 'valid_from', 'valid_until']
                 if self.kind == 'overseas':
                     required += ['country']
         elif self.kind == 'trade_name':

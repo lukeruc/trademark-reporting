@@ -11,7 +11,7 @@ from django.utils.crypto import constant_time_compare
 from .credentials import USERNAME_MAX_LENGTH, account_version, enterprise_initials, random_password
 from .forms import EntryForm
 from .models import Enterprise, Entry, LoginThrottle, MarkImage, ReportingUnit, Submission, User
-from .schema import EMPTY_ALLOWED_KINDS, SCHEMAS, image_keys
+from .schema import EMPTY_ALLOWED_KINDS, ENTERPRISE_FIELDS, SCHEMAS, image_keys
 
 
 class Conflict(Exception):
@@ -118,6 +118,8 @@ def reset_account(unit_id, action, version):
 def save_entry(form, enterprise, entry=None):
     data = {}
     for spec in SCHEMAS[form.kind][1]:
+        if spec.key in ENTERPRISE_FIELDS:
+            continue
         value = form.cleaned_data.get(spec.key)
         if spec.kind == 'image':
             if value:
@@ -136,6 +138,15 @@ def save_entry(form, enterprise, entry=None):
         enterprise.empty_sections.remove(form.kind)
         enterprise.save(update_fields=['empty_sections'])
     return entry
+
+
+def entry_data(entry):
+    # 草稿始终使用所属企业的最新资料，兼容旧明细中单独填写的持有人字段。
+    data = entry.data.copy()
+    for spec in SCHEMAS[entry.kind][1]:
+        if spec.key in ENTERPRISE_FIELDS:
+            data[spec.key] = getattr(entry.enterprise, ENTERPRISE_FIELDS[spec.key])
+    return data
 
 
 def entry_errors(entry):
@@ -186,7 +197,7 @@ def payload_for(unit):
                 'id': enterprise.id, 'name': enterprise.name, 'level': enterprise.level,
                 'nature': enterprise.nature, 'is_primary': enterprise.is_primary,
                 'empty_sections': enterprise.empty_sections,
-                'entries': [{'id': e.id, 'kind': e.kind, 'data': e.data} for e in enterprise.entries.all()],
+                'entries': [{'id': e.id, 'kind': e.kind, 'data': entry_data(e)} for e in enterprise.entries.all()],
             }
             for enterprise in unit.enterprises.prefetch_related('entries')
         ],

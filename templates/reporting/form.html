@@ -2,7 +2,7 @@
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
 <a class="back-link" href="{{ back_url }}">← 返回</a>
-<div class="page-heading"><div><span class="eyebrow">{% if unit %}企业填报{% else %}账号管理{% endif %}</span><h1>{{ title }}</h1><p class="muted">{{ description }}</p></div></div>
+<div class="page-heading"><div><span class="eyebrow">{% if unit %}企业填报{% else %}账号管理{% endif %}</span><h1>{{ title }}</h1><p class="muted">{% if company %}{{ company.name }} · {{ company.level }} 级 · {{ company.nature|default:"性质待填写" }}{% else %}{{ description }}{% endif %}</p></div></div>
 <form method="post" {% if multipart %}enctype="multipart/form-data"{% endif %} class="panel edit-form" data-dirty-form>{% csrf_token %}
   {% if unit %}<input type="hidden" name="revision" value="{{ unit.revision }}">{% endif %}
   {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}

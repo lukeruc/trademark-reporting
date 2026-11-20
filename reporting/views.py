@@ -130,7 +130,7 @@ def enterprise_detail(request, pk):
         groups.append({
             'kind': kind, 'label': SCHEMAS[kind][0], 'can_empty': kind in EMPTY_ALLOWED_KINDS,
             'empty': kind in company.empty_sections,
-            'entries': [{**services.present_entry({'id': e.pk, 'kind': kind, 'data': e.data}),
+            'entries': [{**services.present_entry({'id': e.pk, 'kind': kind, 'data': services.entry_data(e)}),
                          'issues': services.entry_errors(e)} for e in entries],
         })
     return render(request, 'reporting/enterprise.html', {
@@ -178,7 +178,7 @@ def entry_edit(request, pk, kind=None):
             if entry:
                 entry = get_object_or_404(Entry, pk=entry.pk, enterprise=company)
                 stored = entry.data
-            form = EntryForm(request.POST, request.FILES, kind=kind, enterprise=company, stored=stored)
+            form = EntryForm(request.POST, request.FILES, kind=kind, stored=stored)
             if form.is_valid():
                 services.save_entry(form, company, entry)
                 services.touch(unit)
@@ -187,7 +187,7 @@ def entry_edit(request, pk, kind=None):
     else:
         if not unit.editable:
             raise services.Conflict('数据已提交，退回后才能修改。')
-        form = EntryForm(kind=kind, enterprise=company, stored=stored)
+        form = EntryForm(kind=kind, stored=stored)
     current_images = [
         {'label': form.fields[k].label, 'id': stored[k]} for k in stored
         if k in form.fields and k.endswith('image') and stored[k]

@@ -3,6 +3,8 @@ from dataclasses import dataclass
 
 YES_NO = ('是', '否')
 HAS_NONE = ('有', '无')
+# 明细中的持有人信息引用实际企业资料，只在报送快照中保存当时的值。
+ENTERPRISE_FIELDS = {'holder_name': 'name', 'holder_level': 'level'}
 
 
 @dataclass(frozen=True)
